@@ -397,17 +397,23 @@ function Show-Win365GraceManager {
         $selectedItem = $listView.SelectedItem
         if ($selectedItem) {
             [System.Windows.Clipboard]::SetText($selectedItem.ManagedDeviceName)
-            $statusText.Text = "Copied: $($selectedItem.ManagedDeviceName)"
             
-            # Reset status text after 2 seconds
+            # Create a local reference to statusText for the timer
+            $localStatusText = $window.FindName("StatusText")
+            $localStatusText.Text = "Copied: $($selectedItem.ManagedDeviceName)"
+            
+            # Reset status text after 2 seconds using a runspace-friendly approach
             $timer = New-Object System.Windows.Threading.DispatcherTimer
             $timer.Interval = [TimeSpan]::FromSeconds(2)
-            $timerScript = {
+            $timer.Tag = $localStatusText  # Store reference in Tag property
+            $timer.Add_Tick({
                 param($sender, $e)
-                $statusText.Text = "Ready"
+                $statusTextControl = $sender.Tag
+                if ($statusTextControl) {
+                    $statusTextControl.Text = "Ready"
+                }
                 $sender.Stop()
-            }
-            $timer.Add_Tick($timerScript)
+            })
             $timer.Start()
         }
     })
