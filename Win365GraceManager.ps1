@@ -200,10 +200,10 @@ $xaml = @"
                                FontSize="12" Foreground="Gray"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                    <TextBox Name="FilterTextBox" Width="200" Height="25" Margin="0,0,5,0" 
-                             VerticalContentAlignment="Center" Padding="5,0"/>
-                    <TextBlock Text="🔍" FontSize="16" VerticalAlignment="Center" Margin="0,0,10,0" 
-                               ToolTip="Filter by name, user, or status"/>
+                    <TextBlock Text="Search: " FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                    <TextBox Name="FilterTextBox" Width="200" Height="25" Margin="0,0,0,0" 
+                             VerticalContentAlignment="Center" Padding="5,0"
+                             ToolTip="Filter by name, user, or status"/>
                 </StackPanel>
             </DockPanel>
         </StackPanel>
@@ -402,10 +402,12 @@ function Show-Win365GraceManager {
             # Reset status text after 2 seconds
             $timer = New-Object System.Windows.Threading.DispatcherTimer
             $timer.Interval = [TimeSpan]::FromSeconds(2)
-            $timer.Add_Tick({
+            $timerScript = {
+                param($sender, $e)
                 $statusText.Text = "Ready"
-                $timer.Stop()
-            })
+                $sender.Stop()
+            }
+            $timer.Add_Tick($timerScript)
             $timer.Start()
         }
     })
