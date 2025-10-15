@@ -53,9 +53,10 @@ function Get-CloudPCs {
         foreach ($pc in $cloudPCs.value) {
             $pcList += [PSCustomObject]@{
                 Id = $pc.id
-                DisplayName = $pc.displayName
+                ManagedDeviceName = $pc.managedDeviceName
                 UserPrincipalName = $pc.userPrincipalName
                 Status = $pc.status
+                ServicePlanName = $pc.servicePlanName
                 GracePeriodEndDateTime = $pc.gracePeriodEndDateTime
                 IsInGracePeriod = ($pc.status -eq "inGracePeriod")
             }
@@ -79,26 +80,26 @@ function Get-CloudPCs {
 function Invoke-DeprovisionCloudPC {
     param(
         [string]$CloudPCId,
-        [string]$DisplayName
+        [string]$ManagedDeviceName
     )
     
     try {
         $result = [System.Windows.MessageBox]::Show(
-            "Are you sure you want to deprovision '$DisplayName'?`n`nThis action will end the grace period and remove the Cloud PC permanently. This cannot be undone.",
+            "Are you sure you want to deprovision '$ManagedDeviceName'?`n`nThis action will end the grace period and remove the Cloud PC permanently. This cannot be undone.",
             "Confirm Deprovision",
             [System.Windows.MessageBoxButton]::OKCancel,
             [System.Windows.MessageBoxImage]::Warning
         )
         
         if ($result -eq [System.Windows.MessageBoxResult]::OK) {
-            Write-Host "Deprovisioning Cloud PC: $DisplayName ($CloudPCId)"
+            Write-Host "Deprovisioning Cloud PC: $ManagedDeviceName ($CloudPCId)"
             
             # Call the deprovision API
             $uri = "https://graph.microsoft.com/beta/deviceManagement/virtualEndpoint/cloudPCs/$CloudPCId/endGracePeriod"
             Invoke-MgGraphRequest -Method POST -Uri $uri
             
             [System.Windows.MessageBox]::Show(
-                "Cloud PC '$DisplayName' has been successfully deprovisioned.",
+                "Cloud PC '$ManagedDeviceName' has been successfully deprovisioned.",
                 "Success",
                 [System.Windows.MessageBoxButton]::OK,
                 [System.Windows.MessageBoxImage]::Information
@@ -157,10 +158,11 @@ $xaml = @"
                   SelectionMode="Single">
             <ListView.View>
                 <GridView>
-                    <GridViewColumn Header="Cloud PC Name" Width="250" DisplayMemberBinding="{Binding DisplayName}"/>
-                    <GridViewColumn Header="Assigned User" Width="250" DisplayMemberBinding="{Binding UserPrincipalName}"/>
-                    <GridViewColumn Header="Status" Width="150" DisplayMemberBinding="{Binding Status}"/>
-                    <GridViewColumn Header="Grace End Date" Width="180" DisplayMemberBinding="{Binding GracePeriodEndDateTime}"/>
+                    <GridViewColumn Header="Cloud PC Name" Width="200" DisplayMemberBinding="{Binding ManagedDeviceName}"/>
+                    <GridViewColumn Header="Assigned User" Width="220" DisplayMemberBinding="{Binding UserPrincipalName}"/>
+                    <GridViewColumn Header="Service Plan" Width="150" DisplayMemberBinding="{Binding ServicePlanName}"/>
+                    <GridViewColumn Header="Status" Width="130" DisplayMemberBinding="{Binding Status}"/>
+                    <GridViewColumn Header="Grace End Date" Width="150" DisplayMemberBinding="{Binding GracePeriodEndDateTime}"/>
                 </GridView>
             </ListView.View>
             <ListView.ContextMenu>
@@ -247,7 +249,7 @@ function Show-Win365GraceManager {
     $deprovisionMenuItem.Add_Click({
         $selectedItem = $listView.SelectedItem
         if ($selectedItem -and $selectedItem.IsInGracePeriod) {
-            $result = Invoke-DeprovisionCloudPC -CloudPCId $selectedItem.Id -DisplayName $selectedItem.DisplayName
+            $result = Invoke-DeprovisionCloudPC -CloudPCId $selectedItem.Id -ManagedDeviceName $selectedItem.ManagedDeviceName
             if ($result) {
                 # Refresh the list after successful deprovision
                 Update-CloudPCList -Window $window

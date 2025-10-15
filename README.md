@@ -15,8 +15,9 @@ A PowerShell GUI application for managing Windows 365 Business Cloud PCs with a 
 
 The application shows the following information for each Cloud PC:
 
-- **Cloud PC Name**: The display name of the Cloud PC
+- **Cloud PC Name**: The managed device name of the Cloud PC
 - **Assigned User**: The user principal name (UPN) of the assigned user
+- **Service Plan**: The Windows 365 service plan name (e.g., Business 2vCPU/4GB/128GB)
 - **Status**: Current status (e.g., provisioned, inGracePeriod, deprovisioning)
 - **Grace End Date**: When the grace period will end (if applicable)
 
