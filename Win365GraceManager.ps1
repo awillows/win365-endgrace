@@ -206,7 +206,7 @@ function Update-CloudPCList {
         $listView.Items.Add($pc) | Out-Null
     }
     
-    $graceCount = ($Global:CloudPCs | Where-Object { $_.IsInGracePeriod }).Count
+    $graceCount = @(Global:CloudPCs | Where-Object { $_.IsInGracePeriod }).Count
     $countText.Text = "Cloud PCs: $($Global:CloudPCs.Count) (In Grace: $graceCount)"
     $statusText.Text = "Ready"
 }
