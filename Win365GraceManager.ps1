@@ -49,17 +49,31 @@ function Get-CloudPCs {
         Write-Host "Retrieving Cloud PCs..."
         $cloudPCs = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/beta/deviceManagement/virtualEndpoint/cloudPCs" -OutputType PSObject
         
-        $pcList = @()
+        # Use ArrayList for better performance when adding items
+        $pcList = [System.Collections.ArrayList]::new()
         foreach ($pc in $cloudPCs.value) {
-            $pcList += [PSCustomObject]@{
+            # Format the grace period end date for better readability
+            $formattedDate = if ($pc.gracePeriodEndDateTime) {
+                try {
+                    ([DateTime]$pc.gracePeriodEndDateTime).ToString("dd/MM/yyyy HH:mm")
+                }
+                catch {
+                    $pc.gracePeriodEndDateTime
+                }
+            }
+            else {
+                ""
+            }
+            
+            [void]$pcList.Add([PSCustomObject]@{
                 Id = $pc.id
                 ManagedDeviceName = $pc.managedDeviceName
                 UserPrincipalName = $pc.userPrincipalName
                 Status = $pc.status
                 ServicePlanName = $pc.servicePlanName
-                GracePeriodEndDateTime = $pc.gracePeriodEndDateTime
+                GracePeriodEndDateTime = $formattedDate
                 IsInGracePeriod = ($pc.status -eq "inGracePeriod")
-            }
+            })
         }
         
         Write-Host "Retrieved $($pcList.Count) Cloud PCs"
@@ -121,11 +135,43 @@ function Invoke-DeprovisionCloudPC {
     return $false
 }
 
+# Function to export Cloud PCs to CSV
+function Export-CloudPCsToCSV {
+    try {
+        $saveDialog = New-Object Microsoft.Win32.SaveFileDialog
+        $saveDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+        $saveDialog.FileName = "CloudPCs_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
+        $saveDialog.Title = "Export Cloud PCs to CSV"
+        
+        if ($saveDialog.ShowDialog()) {
+            $Global:CloudPCs | Select-Object ManagedDeviceName, UserPrincipalName, ServicePlanName, Status, GracePeriodEndDateTime, IsInGracePeriod | 
+                Export-Csv -Path $saveDialog.FileName -NoTypeInformation -Encoding UTF8
+            
+            [System.Windows.MessageBox]::Show(
+                "Cloud PCs exported successfully to:`n$($saveDialog.FileName)",
+                "Export Successful",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Information
+            )
+            return $true
+        }
+    }
+    catch {
+        [System.Windows.MessageBox]::Show(
+            "Failed to export Cloud PCs: $($_.Exception.Message)",
+            "Export Error",
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        )
+        return $false
+    }
+}
+
 # XAML definition for the GUI
 $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Windows 365 Grace Period Manager" Height="600" Width="900"
+        Title="Windows 365 Grace Period Manager" Height="600" Width="950"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <Style x:Key="GracePeriodStyle" TargetType="ListViewItem">
@@ -146,10 +192,20 @@ $xaml = @"
         
         <!-- Header -->
         <StackPanel Grid.Row="0" Orientation="Vertical" Margin="0,0,0,10">
-            <TextBlock Text="Windows 365 Business Cloud PC Manager" 
-                       FontSize="20" FontWeight="Bold" Margin="0,0,0,5"/>
-            <TextBlock Text="Cloud PCs in grace period are highlighted in blue. Right-click to deprovision." 
-                       FontSize="12" Foreground="Gray"/>
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Left">
+                    <TextBlock Text="Windows 365 Business Cloud PC Manager" 
+                               FontSize="20" FontWeight="Bold" Margin="0,0,0,5"/>
+                    <TextBlock Text="Cloud PCs in grace period are highlighted in blue. Right-click to deprovision." 
+                               FontSize="12" Foreground="Gray"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <TextBox Name="FilterTextBox" Width="200" Height="25" Margin="0,0,5,0" 
+                             VerticalContentAlignment="Center" Padding="5,0"/>
+                    <TextBlock Text="🔍" FontSize="16" VerticalAlignment="Center" Margin="0,0,10,0" 
+                               ToolTip="Filter by name, user, or status"/>
+                </StackPanel>
+            </DockPanel>
         </StackPanel>
         
         <!-- DataGrid for Cloud PCs -->
@@ -167,7 +223,9 @@ $xaml = @"
             </ListView.View>
             <ListView.ContextMenu>
                 <ContextMenu Name="CloudPCContextMenu">
-                    <MenuItem Name="DeprovisionMenuItem" Header="Deprovision Now (End Grace Period)"/>
+                    <MenuItem Name="DeprovisionMenuItem" Header="Deprovision Now (End Grace Period)" InputGestureText="Delete"/>
+                    <Separator/>
+                    <MenuItem Name="CopyNameMenuItem" Header="Copy Device Name" InputGestureText="Ctrl+C"/>
                 </ContextMenu>
             </ListView.ContextMenu>
         </ListView>
@@ -181,8 +239,14 @@ $xaml = @"
             <StatusBarItem>
                 <TextBlock Name="CountText" Text="Cloud PCs: 0"/>
             </StatusBarItem>
+            <StatusBarItem>
+                <TextBlock Name="FilterStatusText" Text="" Foreground="DarkBlue"/>
+            </StatusBarItem>
             <StatusBarItem HorizontalAlignment="Right">
-                <Button Name="RefreshButton" Content="Refresh" Width="80" Padding="5,2"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button Name="ExportButton" Content="Export to CSV" Width="100" Padding="5,2" Margin="0,0,5,0"/>
+                    <Button Name="RefreshButton" Content="Refresh (F5)" Width="90" Padding="5,2"/>
+                </StackPanel>
             </StatusBarItem>
         </StatusBar>
     </Grid>
@@ -191,22 +255,44 @@ $xaml = @"
 
 # Function to refresh the Cloud PC list
 function Update-CloudPCList {
-    param($Window)
+    param(
+        $Window,
+        [string]$FilterText = ""
+    )
     
     $statusText = $Window.FindName("StatusText")
     $countText = $Window.FindName("CountText")
+    $filterStatusText = $Window.FindName("FilterStatusText")
     $listView = $Window.FindName("CloudPCListView")
     
     $statusText.Text = "Loading Cloud PCs..."
     $listView.Items.Clear()
     
-    $Global:CloudPCs = Get-CloudPCs
+    # Only fetch from API if CloudPCs is empty or FilterText is empty (full refresh)
+    if ($Global:CloudPCs.Count -eq 0 -or $FilterText -eq "") {
+        $Global:CloudPCs = Get-CloudPCs
+    }
     
-    foreach ($pc in $Global:CloudPCs) {
+    # Apply filter if provided
+    $displayPCs = $Global:CloudPCs
+    if ($FilterText) {
+        $displayPCs = $Global:CloudPCs | Where-Object {
+            $_.ManagedDeviceName -like "*$FilterText*" -or
+            $_.UserPrincipalName -like "*$FilterText*" -or
+            $_.Status -like "*$FilterText*" -or
+            $_.ServicePlanName -like "*$FilterText*"
+        }
+        $filterStatusText.Text = "Filtered: $($displayPCs.Count) of $($Global:CloudPCs.Count)"
+    }
+    else {
+        $filterStatusText.Text = ""
+    }
+    
+    foreach ($pc in $displayPCs) {
         $listView.Items.Add($pc) | Out-Null
     }
     
-    $graceCount = @(Global:CloudPCs | Where-Object { $_.IsInGracePeriod }).Count
+    $graceCount = @($Global:CloudPCs | Where-Object { $_.IsInGracePeriod }).Count
     $countText.Text = "Cloud PCs: $($Global:CloudPCs.Count) (In Grace: $graceCount)"
     $statusText.Text = "Ready"
 }
@@ -226,12 +312,60 @@ function Show-Win365GraceManager {
     $listView = $window.FindName("CloudPCListView")
     $contextMenu = $window.FindName("CloudPCContextMenu")
     $deprovisionMenuItem = $window.FindName("DeprovisionMenuItem")
+    $copyNameMenuItem = $window.FindName("CopyNameMenuItem")
     $refreshButton = $window.FindName("RefreshButton")
+    $exportButton = $window.FindName("ExportButton")
+    $filterTextBox = $window.FindName("FilterTextBox")
     $statusText = $window.FindName("StatusText")
     
     # Refresh button click event
     $refreshButton.Add_Click({
+        $filterTextBox.Text = ""
         Update-CloudPCList -Window $window
+    })
+    
+    # Export button click event
+    $exportButton.Add_Click({
+        Export-CloudPCsToCSV
+    })
+    
+    # Filter textbox text changed event
+    $filterTextBox.Add_TextChanged({
+        Update-CloudPCList -Window $window -FilterText $filterTextBox.Text
+    })
+    
+    # Keyboard shortcuts
+    $window.Add_KeyDown({
+        param($sender, $e)
+        
+        # F5 - Refresh
+        if ($e.Key -eq [System.Windows.Input.Key]::F5) {
+            $filterTextBox.Text = ""
+            Update-CloudPCList -Window $window
+            $e.Handled = $true
+        }
+        
+        # Delete - Deprovision (if item selected and in grace)
+        if ($e.Key -eq [System.Windows.Input.Key]::Delete) {
+            $selectedItem = $listView.SelectedItem
+            if ($selectedItem -and $selectedItem.IsInGracePeriod) {
+                $result = Invoke-DeprovisionCloudPC -CloudPCId $selectedItem.Id -ManagedDeviceName $selectedItem.ManagedDeviceName
+                if ($result) {
+                    Update-CloudPCList -Window $window
+                }
+            }
+            $e.Handled = $true
+        }
+        
+        # Ctrl+C - Copy device name
+        if ($e.Key -eq [System.Windows.Input.Key]::C -and 
+            ($e.KeyboardDevice.Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
+            $selectedItem = $listView.SelectedItem
+            if ($selectedItem) {
+                [System.Windows.Clipboard]::SetText($selectedItem.ManagedDeviceName)
+            }
+            $e.Handled = $true
+        }
     })
     
     # Context menu opening event - enable/disable based on grace status
@@ -252,8 +386,27 @@ function Show-Win365GraceManager {
             $result = Invoke-DeprovisionCloudPC -CloudPCId $selectedItem.Id -ManagedDeviceName $selectedItem.ManagedDeviceName
             if ($result) {
                 # Refresh the list after successful deprovision
+                $filterTextBox.Text = ""
                 Update-CloudPCList -Window $window
             }
+        }
+    })
+    
+    # Copy name menu item click event
+    $copyNameMenuItem.Add_Click({
+        $selectedItem = $listView.SelectedItem
+        if ($selectedItem) {
+            [System.Windows.Clipboard]::SetText($selectedItem.ManagedDeviceName)
+            $statusText.Text = "Copied: $($selectedItem.ManagedDeviceName)"
+            
+            # Reset status text after 2 seconds
+            $timer = New-Object System.Windows.Threading.DispatcherTimer
+            $timer.Interval = [TimeSpan]::FromSeconds(2)
+            $timer.Add_Tick({
+                $statusText.Text = "Ready"
+                $timer.Stop()
+            })
+            $timer.Start()
         }
     })
     

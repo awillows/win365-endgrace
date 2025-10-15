@@ -6,10 +6,14 @@ A PowerShell GUI application for managing Windows 365 Business Cloud PCs with a 
 
 - 📊 **Visual Cloud PC List**: Display all Windows 365 Business Cloud PCs in your tenant
 - 🔵 **Grace Period Highlighting**: Cloud PCs in grace period are highlighted in blue with bold text
-- 🖱️ **Context Menu Actions**: Right-click to access deprovision options
+- 🖱️ **Context Menu Actions**: Right-click to access deprovision and copy options
 - ⚠️ **Safety Warnings**: Confirmation dialog before deprovisioning
 - 🔒 **Smart Controls**: Deprovision option is disabled for Cloud PCs not in grace period
-- 🔄 **Refresh Capability**: Update the list at any time with the Refresh button
+- 🔄 **Refresh Capability**: Update the list at any time with the Refresh button or F5 key
+- 🔍 **Real-time Filtering**: Search/filter Cloud PCs by name, user, status, or service plan
+- 📤 **CSV Export**: Export Cloud PC data to CSV for reporting and analysis
+- ⌨️ **Keyboard Shortcuts**: F5 to refresh, Delete to deprovision, Ctrl+C to copy device name
+- 📅 **Formatted Dates**: Grace period end dates displayed in readable format (dd/MM/yyyy HH:mm)
 
 ## Display Columns
 
@@ -82,9 +86,16 @@ The application requires the following Microsoft Graph API permissions:
 - Cloud PCs in grace period appear in **blue text** with bold formatting
 - The status bar shows total Cloud PCs and how many are in grace period
 
+#### Filtering Cloud PCs
+
+- Use the **search box** in the top-right corner to filter the list in real-time
+- Filter works on: Device name, User email, Status, and Service Plan
+- The status bar shows how many items match your filter
+- Clear the search box or press F5 to show all Cloud PCs again
+
 #### Deprovisioning a Cloud PC
 
-1. **Right-click** on a Cloud PC in the list
+1. **Right-click** on a Cloud PC in the list (or select it and press **Delete**)
 2. Select **"Deprovision Now (End Grace Period)"** from the context menu
    - This option is only enabled for Cloud PCs in grace period
    - The option appears grayed out for other Cloud PCs
@@ -92,10 +103,30 @@ The application requires the following Microsoft Graph API permissions:
 4. Click **OK** to proceed or **Cancel** to abort
 5. Upon successful deprovision, the list will automatically refresh
 
+#### Copying Device Names
+
+- Right-click a Cloud PC and select **"Copy Device Name"** (or press **Ctrl+C**)
+- The device name is copied to your clipboard
+- Useful for documentation or searching in other tools
+
+#### Exporting Data
+
+- Click the **"Export to CSV"** button in the status bar
+- Choose a location to save the file
+- The CSV includes all Cloud PC information: name, user, service plan, status, and grace period details
+- Perfect for reports, audits, or offline analysis
+
+#### Keyboard Shortcuts
+
+- **F5** - Refresh the Cloud PC list from Microsoft Graph
+- **Delete** - Deprovision selected Cloud PC (if in grace period)
+- **Ctrl+C** - Copy selected device name to clipboard
+
 #### Refreshing the List
 
-- Click the **"Refresh"** button in the status bar to reload Cloud PC data
+- Click the **"Refresh (F5)"** button in the status bar or press **F5**
 - The list automatically refreshes after a successful deprovision operation
+- Clears any active filters
 
 ## Understanding Cloud PC Status
 
@@ -203,6 +234,15 @@ For issues related to:
 
 ## Version History
 
+### Version 1.1 (October 15, 2025)
+- Added real-time filtering/search functionality
+- Added CSV export capability
+- Added keyboard shortcuts (F5, Delete, Ctrl+C)
+- Added "Copy Device Name" context menu option
+- Improved date formatting for grace period end dates
+- Performance optimization for large Cloud PC lists
+- Enhanced user feedback with status messages
+
 ### Version 1.0 (October 15, 2025)
 - Initial release
 - Cloud PC listing with grace period highlighting
@@ -214,11 +254,13 @@ For issues related to:
 
 Feel free to modify and enhance this tool for your specific needs. Some ideas for future enhancements:
 
-- Export Cloud PC list to CSV
-- Filter/search functionality
+- Bulk operations (select multiple Cloud PCs)
 - Additional Cloud PC actions (restart, rename, etc.)
 - Scheduled grace period reports
 - Email notifications for Cloud PCs entering grace period
+- Dark mode theme
+- Save/load filter presets
+- Column sorting with multiple sort keys
 
 ## Additional Resources
 
